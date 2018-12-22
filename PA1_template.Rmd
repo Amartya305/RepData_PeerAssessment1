@@ -1,25 +1,170 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Analysis of data from personal activity monitoring device"
+output:
+  pdf_document: default
+  keep_md: yes
+  html_document: null
 ---
+It is now possible to collect a large amount of data about personal movement using activity monitoring devices such as a Fitbit, Nike Fuelband, or Jawbone Up. These type of devices are part of the "quantified self" movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. But these data remain under-utilized both because the raw data are hard to obtain and there is a lack of statistical methods and software for processing and interpreting the data.
+
+This assignment makes use of data from a personal activity monitoring device. This device collects data at 5 minute intervals through out the day. The data consists of two months of data from an anonymous individual collected during the months of October and November, 2012 and include the number of steps taken in 5 minute intervals each day.
+
+##Libraries used
+- dplyr
+- ggplot2
+- knitr
+```{r include=FALSE}
+
+library(dplyr)
+library(tinytex)
+```
+
+## Loading and preprocessing data
+
+###download data
+```{r}
+zipName<-"activityMonitoringData.zip"
+fileName<-"activity.csv"
+if(!file.exists(zipName)){
+  url<-"https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip"
+  download.file(url,destfile = zipName)
+}
+if(!file.exists(fileName)){
+  unzip(zipName)
+}
+
+```
+### load and preprocess data
+
+```{r}
+activity<-read.csv(fileName)
+str(activity)
+```
+
+The activity dataframe has date column as factor variables
+The date column is converted to Date class
+
+```{r}
+activity$date=as.Date(activity$date,format="%Y-%m-%d")
+str(activity)
+summary(activity)
+```
 
 
-## Loading and preprocessing the data
+## total number of steps taken per day
+```{r}
+stepsPerDayRaw<-aggregate(activity$steps,by=list(activity$date),sum)
+colnames(stepsPerDayRaw)<-c("date","steps")
+head(stepsPerDayRaw)
+summary(stepsPerDayRaw)
+```
+The mean number of steps perday = **10766**
+median of the steps taken per day= **10765**
 
-
-
-## What is mean total number of steps taken per day?
-
-
+### histogram
+```{r}
+hist(stepsPerDayRaw$steps,breaks=20,col = "red")
+```
 
 ## What is the average daily activity pattern?
+```{r}
+avgPerInterval=as.data.frame(summarise(group_by(activity,interval),mean(steps,na.rm=TRUE)))
+colnames(avgPerInterval)<-c("interval","averageSteps")
+head(avgPerInterval)
+```
 
+# time series plot
+```{r}
+plot(avgPerInterval$interval,avgPerInterval$averageSteps,type="l")
+```
 
+# interval with max activity
+```{r}
+maxInterval=avgPerInterval$interval[which(avgPerInterval$averageSteps==max(avgPerInterval$averageStep))]
+maxInterval
+```
+The interval is **835-840** minutes
 
 ## Imputing missing values
 
+We Impute NA's with average of the 5 minute interval
+```{r}
+actImputed<-activity
+for(i in seq_along(actImputed$steps)){
+  if(is.na(actImputed$steps[i])) actImputed$steps[i]<-avgPerInterval$averageSteps[avgPerInterval$interval==actImputed$interval[i]]
+}
+head(actImputed)
+```
 
+### Daily activity after imputing missing values
+```{r}
+stepsPerDayImp<-aggregate(actImputed$steps,by=list(actImputed$date),sum)
+colnames(stepsPerDayImp)<-c("date","steps")
+summary(stepsPerDayImp)
+```
+
+The mean number of steps perday = **10766**
+median of the steps taken per day= **10766**
+
+There is no change in mean and median of the number of steps taken after imputing missing values
+
+### histogram
+
+```{r}
+head(stepsPerDayImp)
+hist(stepsPerDayImp$steps,breaks=20,col = "red")
+`````
+
+The histogram clearly shows the difference after imputing missing values.
+NA values ,if present ,were present for all 5 minute intervals on a particular day,
+as seen from the raw data.Imputing those NA values gives daily total as the mean value 
+"10766" and thus results in a surge in frequency if the interval 10000-11000 in the histogram.
+Remaining intervals show same frequency as the non imputed data.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+###adding week field
+```{r}
+weekAct<-actImputed
+weekAct$day<-NA
+for(i in seq_along(weekAct$date)){
+  if(weekdays(weekAct$date[i])=="Saturday" || weekdays(weekAct$date[i])=="Sunday"){
+    weekAct$day[i]="weekend"
+  }
+  else weekAct$day[i]="weekday"
+}
+weekAct$day=as.factor(weekAct$day)
+```
+
+###Splitting data frame
+
+```{r}
+weekdayActivity<-weekAct[weekAct$day=="weekday",]
+head(weekdayActivity)
+weekendActivity<-weekAct[weekAct$day=="weekend",]
+head(weekendActivity)
+```
+
+###weekDay activity pattern
+
+```{r}
+avgPerIntervalWeekdays=as.data.frame(summarise(group_by(weekdayActivity,interval),mean(steps)))
+colnames(avgPerIntervalWeekdays)<-c("interval","averageSteps")
+head(avgPerIntervalWeekdays)
+```
+
+###weekEnd activity pattern
+
+```{r}
+avgPerIntervalWeekends=as.data.frame(summarise(group_by(weekendActivity,interval),mean(steps)))
+colnames(avgPerIntervalWeekends)<-c("interval","averageSteps")
+head(avgPerIntervalWeekends)
+```
+
+###panel Plot
+
+```{r , fig.width=6,fig.height=8}
+par(mfrow=c(2,1))
+with(avgPerIntervalWeekdays,plot(interval,averageSteps,type="l",sub="weekdays"))
+with(avgPerIntervalWeekends,plot(interval,averageSteps,type="l",sub="weekends"))
+```
